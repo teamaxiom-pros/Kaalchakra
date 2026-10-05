@@ -7,8 +7,14 @@ interface LoginPageProps {
   returnUrl?: string;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ navigate, returnUrl = '/kaalchakra' }) => {
-  const { signIn, isConfigured } = useAuth();
+export const LoginPage: React.FC<LoginPageProps> = ({ navigate, returnUrl = '/app' }) => {
+  const { user, signIn, isConfigured } = useAuth();
+
+  React.useEffect(() => {
+    if (user) {
+      navigate('/app');
+    }
+  }, [user, navigate]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

@@ -5,13 +5,12 @@ const STORAGE_KEYS = {
   PLAYER: 'kaalchakra:player',
   SESSIONS: 'kaalchakra:sessions',
   SETTINGS: 'kaalchakra:settings',
-  DEMO_PLAYER: 'kaalchakra:demo_player',
 };
 
 export const EMPTY_PROFILE: PlayerProfile = {
   id: '',
-  name: 'New Scholar',
-  title: 'Novice Historian & Explorer',
+  name: 'Scholar',
+  title: 'Novice Historian',
   level: 1,
   civilizationXp: 0,
   domainScores: {
@@ -26,28 +25,6 @@ export const EMPTY_PROFILE: PlayerProfile = {
   completedExperiences: [],
   unlockedDiscoveries: [],
   unlockedAchievements: [],
-  lastActiveAt: new Date().toISOString(),
-  simulationMode: false,
-};
-
-export const DEMO_PROFILE: PlayerProfile = {
-  id: 'demo-scholar-sih',
-  name: 'Arya Explorer (SIH Demo)',
-  title: 'Junior Heritage Architect',
-  level: 3,
-  civilizationXp: 640,
-  domainScores: {
-    architecture: 65,
-    defence: 45,
-    trade: 30,
-    waterManagement: 70,
-    heritage: 55,
-    engineering: 40,
-    language: 25,
-  },
-  completedExperiences: ['fort-master', 'bharat-architect'],
-  unlockedDiscoveries: ['ck-dholavira-water', 'ck-kumbhalgarh-walls', 'ck-brihadisvara-capstone'],
-  unlockedAchievements: ['ach-first-step', 'ach-water-sage', 'ach-fort-builder'],
   lastActiveAt: new Date().toISOString(),
   simulationMode: false,
 };
@@ -75,30 +52,6 @@ export const storageService = {
       localStorage.setItem(STORAGE_KEYS.PLAYER, JSON.stringify(profile));
     } catch (err) {
       console.warn('Failed to save profile to localStorage:', err);
-    }
-  },
-
-  loadDemoProfile(): PlayerProfile {
-    try {
-      if (typeof window === 'undefined' || !window.localStorage) {
-        return DEMO_PROFILE;
-      }
-      const data = localStorage.getItem(STORAGE_KEYS.DEMO_PLAYER);
-      if (!data) {
-        return DEMO_PROFILE;
-      }
-      return JSON.parse(data) as PlayerProfile;
-    } catch {
-      return DEMO_PROFILE;
-    }
-  },
-
-  saveDemoProfile(profile: PlayerProfile): void {
-    try {
-      if (typeof window === 'undefined' || !window.localStorage) return;
-      localStorage.setItem(STORAGE_KEYS.DEMO_PLAYER, JSON.stringify(profile));
-    } catch (err) {
-      console.warn('Failed to save demo profile to localStorage:', err);
     }
   },
 

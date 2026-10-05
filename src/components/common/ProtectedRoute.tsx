@@ -1,31 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   currentPath: string;
   navigate: (path: string) => void;
-  isDemoMode?: boolean;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   currentPath,
   navigate,
-  isDemoMode = false,
 }) => {
-  const { user, loading, initialized, isConfigured } = useAuth();
+  const { user, loading, initialized } = useAuth();
 
-  // If in isolated demo mode, allow access directly
-  if (isDemoMode) {
-    return <>{children}</>;
-  }
-
-  // If Supabase is not configured yet, allow viewing with local storage fallback
-  if (!isConfigured) {
-    return <>{children}</>;
-  }
+  useEffect(() => {
+    if (initialized && !loading && !user) {
+      // Redirect to /auth/login preserving intended path
+      navigate(`/auth/login?returnUrl=${encodeURIComponent(currentPath)}`);
+    }
+  }, [initialized, loading, user, currentPath, navigate]);
 
   if (loading || !initialized) {
     return (
@@ -51,15 +45,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           }}
         />
         <div style={{ color: 'var(--accent-gold)', fontWeight: 600, fontSize: '0.95rem' }}>
-          Restoring scholar journey session...
+          Verifying scholar authentication...
         </div>
       </div>
     );
   }
 
   if (!user) {
-    // Redirect to login preserving intended path
-    navigate(`/login?returnUrl=${encodeURIComponent(currentPath)}`);
     return null;
   }
 

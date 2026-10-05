@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PlayerProfile } from './types/player';
-import { storageService, EMPTY_PROFILE, DEMO_PROFILE } from './services/storageService';
+import { storageService, EMPTY_PROFILE } from './services/storageService';
 import { recordExperienceCompletion } from './domain/progression/progressionEngine';
 import { getGameMaster } from './domain/ai/aiFactory';
 import { Navbar } from './components/common/Navbar';
@@ -13,6 +13,7 @@ import { sessionService } from './services/sessionService';
 import { offlineSyncService } from './services/offlineSyncService';
 import { isSupabaseReady } from './lib/supabase/client';
 
+import { LandingPage } from './features/landing/LandingPage';
 import { HomePage } from './features/home/HomePage';
 import { DiscoverPage } from './features/discover/DiscoverPage';
 import { PlayHubPage } from './features/play/PlayHubPage';
@@ -33,35 +34,20 @@ import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 function AppContent() {
   const { user, profile: authProfile, playerProgress, refreshProfile } = useAuth();
 
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
-    return window.location.pathname === '/kaalchakra/demo';
-  });
-
   const [localProfile, setLocalProfile] = useState<PlayerProfile>(() => {
     return storageService.loadPlayerProfile();
   });
 
-  const [demoProfile, setDemoProfile] = useState<PlayerProfile>(() => {
-    return storageService.loadDemoProfile();
-  });
-
   const [currentPath, setCurrentPath] = useState<string>(() => {
-    const path = window.location.pathname;
-    return path === '/' ? '/kaalchakra' : path;
+    return window.location.pathname;
   });
 
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
 
-  // Sync with browser popstate
+  // Sync with browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      if (path === '/kaalchakra/demo') {
-        setIsDemoMode(true);
-        setCurrentPath('/kaalchakra');
-      } else {
-        setCurrentPath(path === '/' ? '/kaalchakra' : path);
-      }
+      setCurrentPath(window.location.pathname);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -69,14 +55,6 @@ function AppContent() {
   }, []);
 
   const navigate = (path: string) => {
-    if (path === '/kaalchakra/demo') {
-      setIsDemoMode(true);
-      window.history.pushState({}, '', '/kaalchakra');
-      setCurrentPath('/kaalchakra');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
     if (window.location.pathname !== path) {
       window.history.pushState({}, '', path);
     }
@@ -84,19 +62,11 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const toggleDemoMode = () => {
-    setIsDemoMode(prev => !prev);
-  };
-
   const { mode: gameMasterMode } = getGameMaster();
   const isCloudConnected = isSupabaseReady();
 
-  // Determine active profile: Demo mode vs Authenticated Supabase profile vs Local profile
+  // Authoritative active profile: Derived strictly from Supabase for authenticated user, or empty profile
   const activeProfile: PlayerProfile = React.useMemo(() => {
-    if (isDemoMode) {
-      return demoProfile;
-    }
-
     if (user && playerProgress) {
       return {
         id: user.id,
@@ -111,7 +81,7 @@ function AppContent() {
           waterManagement: playerProgress.water_management_score,
           heritage: playerProgress.heritage_score,
           engineering: playerProgress.engineering_score,
-          language: localProfile.domainScores?.language || 0,
+          language: playerProgress.language_score || localProfile.domainScores?.language || 0,
         },
         completedExperiences: localProfile.completedExperiences || [],
         unlockedDiscoveries: localProfile.unlockedDiscoveries || [],
@@ -121,9 +91,8 @@ function AppContent() {
       };
     }
 
-    // Default to local profile
-    return localProfile;
-  }, [isDemoMode, demoProfile, user, playerProgress, authProfile, localProfile]);
+    return localProfile || EMPTY_PROFILE;
+  }, [user, playerProgress, authProfile, localProfile]);
 
   // Handler when any experience completes
   const handleExperienceCompletion = async (
@@ -144,14 +113,7 @@ function AppContent() {
 
     const sessionId = crypto.randomUUID();
 
-    if (isDemoMode) {
-      // Demo mode isolation: NEVER write demo results to real database
-      storageService.saveDemoProfile(updatedProfile);
-      setDemoProfile(updatedProfile);
-      return;
-    }
-
-    // Update local profile representation
+    // Update local profile state
     storageService.savePlayerProfile(updatedProfile);
     setLocalProfile(updatedProfile);
 
@@ -182,7 +144,6 @@ function AppContent() {
         });
 
         if (result.success) {
-          // Log completion action
           await sessionService.recordAction(sessionId, experienceId, 'session_completed', {
             performance,
             xpEarned,
@@ -190,7 +151,6 @@ function AppContent() {
           });
           await refreshProfile();
         } else {
-          // Queue in IndexedDB for retry
           await offlineSyncService.queueSession(
             {
               sessionId,
@@ -205,7 +165,6 @@ function AppContent() {
           );
         }
       } catch {
-        // Fallback to offline queue
         await offlineSyncService.queueSession(
           {
             sessionId,
@@ -224,94 +183,100 @@ function AppContent() {
 
   // Render view based on route
   const renderCurrentView = () => {
-    // Auth Routes
-    if (currentPath === '/login') {
+    // 1. PUBLIC MARKETING LANDING PAGE (Root URL)
+    if (currentPath === '/' || currentPath === '') {
+      return <LandingPage navigate={navigate} />;
+    }
+
+    // 2. AUTHENTICATION ROUTES (Public with auto-redirect if already logged in)
+    if (currentPath === '/auth/login' || currentPath === '/login') {
       return <LoginPage navigate={navigate} />;
     }
-    if (currentPath === '/signup') {
+    if (currentPath === '/auth/signup' || currentPath === '/signup') {
       return <SignUpPage navigate={navigate} />;
     }
-    if (currentPath === '/verify-email') {
-      return <VerifyEmailPage navigate={navigate} />;
-    }
-    if (currentPath === '/forgot-password') {
+    if (currentPath === '/auth/forgot-password' || currentPath === '/forgot-password') {
       return <ForgotPasswordPage navigate={navigate} />;
     }
-    if (currentPath === '/reset-password') {
+    if (currentPath === '/auth/reset-password' || currentPath === '/reset-password') {
       return <ResetPasswordPage navigate={navigate} />;
     }
-
-    // Public Route: Home
-    if (currentPath === '/' || currentPath === '/kaalchakra') {
-      return <HomePage profile={activeProfile} navigate={navigate} />;
+    if (currentPath === '/auth/verify-email' || currentPath === '/verify-email') {
+      return <VerifyEmailPage navigate={navigate} />;
     }
 
-    // Public Route: Discover
-    if (currentPath === '/kaalchakra/discover') {
-      return <DiscoverPage navigate={navigate} />;
-    }
-
-    // Play Hub
-    if (currentPath === '/kaalchakra/play') {
-      return <PlayHubPage navigate={navigate} />;
-    }
-
-    // Protected Route: Journey
-    if (currentPath === '/kaalchakra/journey') {
+    // 3. AUTHENTICATED APP HOME
+    if (currentPath === '/app' || currentPath === '/kaalchakra') {
       return (
-        <ProtectedRoute currentPath={currentPath} navigate={navigate} isDemoMode={isDemoMode}>
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
+          <HomePage profile={activeProfile} navigate={navigate} />
+        </ProtectedRoute>
+      );
+    }
+
+    // 4. AUTHENTICATED DISCOVER (Cultural Database)
+    if (currentPath === '/discover' || currentPath === '/kaalchakra/discover') {
+      return (
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
+          <DiscoverPage navigate={navigate} />
+        </ProtectedRoute>
+      );
+    }
+
+    // 5. AUTHENTICATED PLAY HUB
+    if (currentPath === '/experiences' || currentPath === '/play' || currentPath === '/kaalchakra/play') {
+      return (
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
+          <PlayHubPage navigate={navigate} />
+        </ProtectedRoute>
+      );
+    }
+
+    // 6. AUTHENTICATED JOURNEY
+    if (currentPath === '/journey' || currentPath === '/kaalchakra/journey') {
+      return (
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <JourneyPage
             profile={activeProfile}
             navigate={navigate}
             onProfileUpdated={updated => {
-              if (isDemoMode) {
-                storageService.saveDemoProfile(updated);
-                setDemoProfile(updated);
-              } else {
-                storageService.savePlayerProfile(updated);
-                setLocalProfile(updated);
-              }
+              storageService.savePlayerProfile(updated);
+              setLocalProfile(updated);
             }}
           />
         </ProtectedRoute>
       );
     }
 
-    // Protected Route: Profile
-    if (currentPath === '/kaalchakra/profile') {
+    // 7. AUTHENTICATED PROFILE
+    if (currentPath === '/profile' || currentPath === '/kaalchakra/profile') {
       return (
-        <ProtectedRoute currentPath={currentPath} navigate={navigate} isDemoMode={isDemoMode}>
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <ProfilePage
             profile={activeProfile}
             onUpdateProfile={updated => {
-              if (isDemoMode) {
-                storageService.saveDemoProfile(updated);
-                setDemoProfile(updated);
-              } else {
-                storageService.savePlayerProfile(updated);
-                setLocalProfile(updated);
-              }
+              storageService.savePlayerProfile(updated);
+              setLocalProfile(updated);
             }}
             gameMasterMode={gameMasterMode}
-            isDemoMode={isDemoMode}
           />
         </ProtectedRoute>
       );
     }
 
-    // Protected Route: Educator Dashboard
+    // 8. AUTHENTICATED EDUCATOR DASHBOARD
     if (currentPath === '/educator') {
       return (
-        <ProtectedRoute currentPath={currentPath} navigate={navigate} isDemoMode={isDemoMode}>
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <EducatorDashboard navigate={navigate} />
         </ProtectedRoute>
       );
     }
 
-    // Protected Route: Fort Master
-    if (currentPath === '/kaalchakra/experience/fort-master') {
+    // 9. AUTHENTICATED EXPERIENCES
+    if (currentPath === '/experience/fort-master' || currentPath === '/kaalchakra/experience/fort-master') {
       return (
-        <ProtectedRoute currentPath={currentPath} navigate={navigate} isDemoMode={isDemoMode}>
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <FortMasterGame
             onCompleteExperience={(xp, gains, discs, perf) =>
               handleExperienceCompletion('fort-master', xp, gains, discs, perf)
@@ -323,10 +288,9 @@ function AppContent() {
       );
     }
 
-    // Protected Route: Bharat Architect
-    if (currentPath === '/kaalchakra/experience/bharat-architect') {
+    if (currentPath === '/experience/bharat-architect' || currentPath === '/kaalchakra/experience/bharat-architect') {
       return (
-        <ProtectedRoute currentPath={currentPath} navigate={navigate} isDemoMode={isDemoMode}>
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <BharatArchitectGame
             onCompleteExperience={(xp, gains, discs, perf) =>
               handleExperienceCompletion('bharat-architect', xp, gains, discs, perf)
@@ -338,10 +302,9 @@ function AppContent() {
       );
     }
 
-    // Protected Route: Lost Script
-    if (currentPath === '/kaalchakra/experience/lost-script') {
+    if (currentPath === '/experience/lost-script' || currentPath === '/kaalchakra/experience/lost-script') {
       return (
-        <ProtectedRoute currentPath={currentPath} navigate={navigate} isDemoMode={isDemoMode}>
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <LostScriptGame
             onCompleteExperience={(xp, gains, discs, perf) =>
               handleExperienceCompletion('lost-script', xp, gains, discs, perf)
@@ -353,14 +316,18 @@ function AppContent() {
       );
     }
 
-    // Dynamic preview modules route e.g. /kaalchakra/experience/bharat-bazaar
-    if (currentPath.startsWith('/kaalchakra/experience/')) {
-      const expId = currentPath.replace('/kaalchakra/experience/', '');
-      return <ModulePreviewPage experienceId={expId} onNavigate={navigate} />;
+    // 10. PREVIEW MODULES
+    if (currentPath.startsWith('/experience/') || currentPath.startsWith('/kaalchakra/experience/')) {
+      const expId = currentPath.replace('/kaalchakra/experience/', '').replace('/experience/', '');
+      return (
+        <ProtectedRoute currentPath={currentPath} navigate={navigate}>
+          <ModulePreviewPage experienceId={expId} onNavigate={navigate} />
+        </ProtectedRoute>
+      );
     }
 
-    // Fallback: Home
-    return <HomePage profile={activeProfile} navigate={navigate} />;
+    // Fallback: If unknown path, route to Landing Page
+    return <LandingPage navigate={navigate} />;
   };
 
   return (
@@ -378,9 +345,7 @@ function AppContent() {
         profile={activeProfile}
         gameMasterMode={gameMasterMode}
         isCloudConnected={isCloudConnected}
-        isDemoMode={isDemoMode}
         onOpenSimModal={() => setIsSimModalOpen(true)}
-        onToggleDemoMode={toggleDemoMode}
       />
 
       <main style={{ flex: 1 }}>{renderCurrentView()}</main>

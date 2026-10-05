@@ -38,7 +38,10 @@ let lastUsedKey = '';
 
 export function getSupabaseConfig(): { url: string; anonKey: string } {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+  const envKey =
+    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    '';
 
   const storedUrl = getStored(STORAGE_KEYS.URL);
   const storedKey = getStored(STORAGE_KEYS.ANON_KEY);
@@ -105,10 +108,10 @@ export async function testSupabaseConnection(): Promise<{ connected: boolean; er
     const latencyMs = Math.round(performance.now() - start);
 
     if (error) {
-      if (error.code === '42P01') {
+      if (error.code === '42P01' || error.code === 'PGRST205' || error.message?.includes('schema cache')) {
         return {
           connected: true,
-          error: 'Connected to Supabase! Note: The "profiles" table was not found yet. Please run supabase/schema.sql in your SQL Editor.',
+          error: 'Connected to Supabase! Note: The "profiles" table was not found yet. Please run supabase/migrations/20261005000001_kaalchakra_core_schema.sql in your Supabase SQL Editor.',
           latencyMs,
         };
       }

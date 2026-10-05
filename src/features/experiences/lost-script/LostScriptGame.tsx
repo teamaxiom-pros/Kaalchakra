@@ -154,9 +154,9 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
         }}
       >
         <button
-          onClick={() => onNavigate('/kaalchakra/play')}
+          onClick={() => onNavigate('/experiences')}
           className="btn btn-ghost btn-sm"
-          style={{ gap: '0.4rem' }}
+          style={{ gap: '0.4rem', color: 'var(--text-secondary)' }}
         >
           <ArrowLeft size={16} /> All Experiences
         </button>
@@ -168,7 +168,7 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
           <button
             onClick={handleCompleteCase}
             disabled={!completion.isComplete}
-            className={`btn btn-sm ${completion.isComplete ? 'btn-gold' : 'btn-secondary'}`}
+            className={`btn btn-sm ${completion.isComplete ? 'btn-primary' : 'btn-secondary'}`}
             style={{ fontWeight: 700, opacity: completion.isComplete ? 1 : 0.6 }}
           >
             <Sparkles size={14} /> Submit Decipherment
@@ -178,22 +178,24 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
 
       {/* Case Switcher & Eyebrow */}
       <div
-        className="kc-card"
+        className="artifact-card"
         style={{
-          background: 'linear-gradient(135deg, rgba(22, 29, 41, 0.95), rgba(30, 41, 59, 0.85))',
-          borderLeft: '4px solid var(--accent-indigo)',
+          background: 'linear-gradient(135deg, rgba(30, 22, 22, 0.95), rgba(18, 22, 28, 0.95))',
+          borderLeft: '4px solid var(--accent-gold)',
           marginBottom: '1.75rem',
-          padding: '1.25rem 1.5rem',
+          padding: '1.5rem 1.75rem',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-          <span className="badge badge-indigo">Epigraphical Investigation</span>
+          <span className="badge badge-gold">ASI EPIGRAPHICAL EXCAVATION</span>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             {currentCase.era} • {currentCase.location}
           </span>
         </div>
-        <h2 style={{ fontSize: '1.45rem', marginBottom: '0.45rem' }}>{currentCase.title}</h2>
-        <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
+        <h2 style={{ fontSize: '1.55rem', fontFamily: 'var(--font-serif)', marginBottom: '0.45rem' }}>
+          {currentCase.title}
+        </h2>
+        <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           {currentCase.historicalContext}
         </p>
 

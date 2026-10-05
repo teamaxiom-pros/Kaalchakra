@@ -185,9 +185,9 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
         }}
       >
         <button
-          onClick={() => onNavigate('/kaalchakra/play')}
+          onClick={() => onNavigate('/experiences')}
           className="btn btn-ghost btn-sm"
-          style={{ gap: '0.4rem' }}
+          style={{ gap: '0.4rem', color: 'var(--text-secondary)' }}
         >
           <ArrowLeft size={16} /> All Experiences
         </button>
@@ -198,7 +198,7 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
           </button>
           <button
             onClick={handleCompleteMission}
-            className="btn btn-gold btn-sm"
+            className="btn btn-primary btn-sm"
             style={{ fontWeight: 700 }}
           >
             <Sparkles size={14} /> Conclude Planning
@@ -208,24 +208,24 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
 
       {/* Mission Banner */}
       <div
-        className="kc-card"
+        className="artifact-card"
         style={{
-          background: 'linear-gradient(135deg, rgba(22, 29, 41, 0.95), rgba(30, 41, 59, 0.85))',
+          background: 'linear-gradient(135deg, rgba(26, 22, 17, 0.95), rgba(18, 22, 28, 0.95))',
           borderLeft: '4px solid var(--accent-gold)',
           marginBottom: '1.75rem',
-          padding: '1.25rem 1.5rem',
+          padding: '1.5rem 1.75rem',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-          <span className="badge badge-gold">Urban Planning Mission</span>
+          <span className="badge badge-gold">BRONZE AGE ARCHAEOLOGICAL GRID</span>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Bronze-Age Civil Engineering (Mohenjo-daro & Dholavira Tradition)
+            Bronze-Age Civil Engineering (Mohenjo-daro &amp; Dholavira Tradition)
           </span>
         </div>
-        <h2 style={{ fontSize: '1.45rem', marginBottom: '0.45rem' }}>
+        <h2 style={{ fontSize: '1.55rem', fontFamily: 'var(--font-serif)', marginBottom: '0.45rem' }}>
           Bharat Architect: The Harappan Orthogonal Grid
         </h2>
-        <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
+        <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           Design an egalitarian historical settlement. Ensure every residential home is adjacent to a
           paved thoroughfare and covered wastewater drainage conduit, with public water reservoirs to
           safeguard against monsoon flash floods.

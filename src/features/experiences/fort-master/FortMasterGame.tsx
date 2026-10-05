@@ -190,9 +190,9 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
         }}
       >
         <button
-          onClick={() => onNavigate('/kaalchakra/play')}
+          onClick={() => onNavigate('/experiences')}
           className="btn btn-ghost btn-sm"
-          style={{ gap: '0.4rem' }}
+          style={{ gap: '0.4rem', color: 'var(--text-secondary)' }}
         >
           <ArrowLeft size={16} /> All Experiences
         </button>
@@ -203,7 +203,7 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
           </button>
           <button
             onClick={handleCompleteMission}
-            className="btn btn-gold btn-sm"
+            className="btn btn-primary btn-sm"
             style={{ fontWeight: 700 }}
           >
             <Sparkles size={14} /> Conclude & Submit Fort
@@ -213,24 +213,24 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
 
       {/* Mission Banner */}
       <div
-        className="kc-card"
+        className="artifact-card"
         style={{
-          background: 'linear-gradient(135deg, rgba(22, 29, 41, 0.95), rgba(30, 41, 59, 0.85))',
-          borderLeft: '4px solid var(--accent-terracotta)',
+          background: 'linear-gradient(135deg, rgba(22, 29, 41, 0.95), rgba(17, 23, 33, 0.95))',
+          borderLeft: '4px solid var(--accent-gold)',
           marginBottom: '1.75rem',
-          padding: '1.25rem 1.5rem',
+          padding: '1.5rem 1.75rem',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-          <span className="badge badge-terracotta">Mission Objective</span>
+          <span className="badge badge-gold">HISTORICAL FORTRESS CHRONICLE</span>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             Deccan Basalt Hill Fort Architecture (Sahyadri Range)
           </span>
         </div>
-        <h2 style={{ fontSize: '1.45rem', marginBottom: '0.45rem' }}>
-          Fort Master: Bastions & The Monsoon Deluge
+        <h2 style={{ fontSize: '1.55rem', fontFamily: 'var(--font-serif)', marginBottom: '0.45rem' }}>
+          Fort Master: Bastions &amp; The Monsoon Deluge
         </h2>
-        <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
+        <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           Construct rock-cut rainwater cisterns (Tankas), elevated granaries (Amberkhana), and bastion
           gates along the natural basalt ridge. Secure water and food resilience before seasonal crises
           test your fortress.

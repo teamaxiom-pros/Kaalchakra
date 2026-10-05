@@ -19,6 +19,7 @@ import {
   UserPlus,
   ArrowRight,
 } from 'lucide-react';
+import { RoyalSealBadge } from './HistoricalMotifs';
 
 interface NavbarProps {
   currentPath: string;
@@ -45,7 +46,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const displayName = authProfile?.display_name || user?.email?.split('@')[0] || profile.name || 'Scholar';
 
   const appNavLinks = [
-    { label: 'Home', path: '/app', icon: Landmark },
     { label: 'Discover', path: '/discover', icon: Compass },
     { label: 'Experiences', path: '/experiences', icon: Shield },
     { label: 'My Journey', path: '/journey', icon: Award },
@@ -84,10 +84,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        background: 'rgba(13, 17, 23, 0.94)',
+        background: 'rgba(13, 15, 19, 0.96)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--border-subtle)',
+        borderBottom: '1px solid var(--border-gold)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
       }}
     >
       <div
@@ -99,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           height: 'var(--header-height)',
         }}
       >
-        {/* Brand / Logo */}
+        {/* Brand / Logo with Royal Seal */}
         <div
           onClick={() => handleNav(user ? '/app' : '/')}
           style={{
@@ -113,31 +114,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           onKeyDown={e => e.key === 'Enter' && handleNav(user ? '/app' : '/')}
           aria-label="Kaalchakra Home"
         >
-          <div
-            style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #1c2430, #0f141c)',
-              border: '1.5px solid var(--accent-gold)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 0 12px var(--accent-gold-glow)',
-            }}
-          >
-            <span style={{ fontSize: '1.4rem' }}>☸</span>
-          </div>
+          <RoyalSealBadge size={42} />
           <div>
             <div
               style={{
                 fontFamily: 'var(--font-serif)',
                 fontWeight: 800,
-                fontSize: '1.3rem',
+                fontSize: '1.28rem',
                 letterSpacing: '0.08em',
-                background: 'linear-gradient(90deg, #ffffff, var(--accent-gold))',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: '#fff8eb',
                 lineHeight: 1.1,
               }}
             >
@@ -145,10 +130,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div
               style={{
-                fontSize: '0.72rem',
-                color: 'var(--text-muted)',
-                letterSpacing: '0.04em',
-                fontWeight: 500,
+                fontFamily: 'var(--font-serif)',
+                fontSize: '0.68rem',
+                color: 'var(--accent-gold)',
+                letterSpacing: '0.06em',
+                fontWeight: 600,
               }}
             >
               DISCOVER INDIA THROUGH PLAY
@@ -158,6 +144,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Desktop Nav Links */}
         {isPublicLanding ? (
+
           <nav
             style={{
               display: 'none',

@@ -37,7 +37,7 @@ export const authService = {
     }
 
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/verify-email` : undefined;
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/auth/verify-email` : undefined;
 
       const { data, error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
@@ -115,7 +115,7 @@ export const authService = {
     if (!supabase) return { error: 'Supabase is not configured' };
 
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined;
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/auth/reset-password` : undefined;
 
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: redirectUrl,

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Lock, Mail, User, Globe, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Lock, Mail, User, Globe, ArrowRight, ArrowLeft, AlertCircle, Info } from 'lucide-react';
 import {
   RoyalSealBadge,
   CornerBrackets,
@@ -12,7 +12,7 @@ interface SignUpPageProps {
 }
 
 export const SignUpPage: React.FC<SignUpPageProps> = ({ navigate }) => {
-  const { user, signUp } = useAuth();
+  const { user, signUp, isConfigured } = useAuth();
 
   React.useEffect(() => {
     if (user) {
@@ -35,8 +35,8 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ navigate }) => {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters long.');
       return;
     }
 
@@ -138,6 +138,27 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ navigate }) => {
               Your exploration of India's history begins here.
             </p>
           </div>
+
+          {!isConfigured && (
+            <div
+              style={{
+                background: 'rgba(217, 119, 6, 0.1)',
+                border: '1px solid var(--accent-gold)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.75rem 1rem',
+                fontSize: '0.82rem',
+                color: 'var(--accent-gold-light)',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                gap: '0.6rem',
+              }}
+            >
+              <Info size={16} color="var(--accent-gold)" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Setup Note:</strong> Supabase backend connection is pending configuration. Please ensure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> are set in Vercel environment variables.
+              </div>
+            </div>
+          )}
 
           {errorMessage && (
             <div

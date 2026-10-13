@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { Mail, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 import {
   RoyalSealBadge,
@@ -28,7 +29,14 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ navigate }) =>
     setIsResending(true);
     setResendFeedback(null);
     try {
-      setResendFeedback(`Verification token re-dispatched to ${targetEmail}. Please check your inbox.`);
+      const res = await authService.resendVerification(targetEmail);
+      if (res.error) {
+        setResendFeedback(`Unable to re-dispatch: ${res.error}`);
+      } else {
+        setResendFeedback(`Verification token re-dispatched to ${targetEmail}. Please check your inbox.`);
+      }
+    } catch (err: any) {
+      setResendFeedback(`Dispatch failed: ${err?.message || 'Network error'}`);
     } finally {
       setIsResending(false);
     }

@@ -1,111 +1,29 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-const STORAGE_KEYS = {
-  URL: 'kaalchakra:supabase_url',
-  ANON_KEY: 'kaalchakra:supabase_anon_key',
-};
-
-// In-memory fallback if localStorage is unavailable (e.g. Node test environment)
-const inMemoryStorage: Record<string, string> = {};
-
-function getStored(key: string): string {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(key) || '';
-    }
-  } catch {
-    // fallback
-  }
-  return inMemoryStorage[key] || '';
-}
-
-function setStored(key: string, value: string): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      if (value) localStorage.setItem(key, value);
-      else localStorage.removeItem(key);
-    }
-  } catch {
-    // fallback
-  }
-  if (value) inMemoryStorage[key] = value;
-  else delete inMemoryStorage[key];
-}
-
-let cachedClient: SupabaseClient | null = null;
-let lastUsedUrl = '';
-let lastUsedKey = '';
-
-let isExplicitlyCleared = false;
+import { SupabaseClient } from '@supabase/supabase-js';
+import {
+  getSupabase,
+  getSupabaseEnvConfig,
+  setSupabaseCustomConfig,
+  isSupabaseReady,
+} from '../lib/supabase/client';
 
 export function getSupabaseConfig(): { url: string; anonKey: string } {
-  if (isExplicitlyCleared) {
-    return { url: '', anonKey: '' };
-  }
-
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-  const envKey =
-    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    '';
-
-  const storedUrl = getStored(STORAGE_KEYS.URL);
-  const storedKey = getStored(STORAGE_KEYS.ANON_KEY);
-
-  const url = (storedUrl || envUrl).trim();
-  const anonKey = (storedKey || envKey).trim();
-
-  return { url, anonKey };
+  return getSupabaseEnvConfig();
 }
 
 export function setSupabaseConfig(url: string, anonKey: string): void {
-  if (url === '' && anonKey === '') {
-    isExplicitlyCleared = true;
-  } else {
-    isExplicitlyCleared = false;
-  }
-  setStored(STORAGE_KEYS.URL, url.trim());
-  setStored(STORAGE_KEYS.ANON_KEY, anonKey.trim());
-
-  // Reset cached client
-  cachedClient = null;
-  lastUsedUrl = '';
-  lastUsedKey = '';
+  setSupabaseCustomConfig(url, anonKey);
 }
 
 export function isSupabaseConfigured(): boolean {
-  const { url, anonKey } = getSupabaseConfig();
-  return Boolean(url && anonKey && url.startsWith('http') && anonKey.length > 10);
+  return isSupabaseReady();
 }
 
 export function getSupabaseClient(): SupabaseClient | null {
-  const { url, anonKey } = getSupabaseConfig();
-  if (!url || !anonKey || !url.startsWith('http') || anonKey.length < 10) {
-    return null;
-  }
-
-  if (cachedClient && lastUsedUrl === url && lastUsedKey === anonKey) {
-    return cachedClient;
-  }
-
-  try {
-    cachedClient = createClient(url, anonKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-    lastUsedUrl = url;
-    lastUsedKey = anonKey;
-    return cachedClient;
-  } catch (err) {
-    console.warn('Failed to initialize Supabase client:', err);
-    return null;
-  }
+  return getSupabase() as unknown as SupabaseClient | null;
 }
 
 export async function testSupabaseConnection(): Promise<{ connected: boolean; error?: string; latencyMs?: number }> {
-  const client = getSupabaseClient();
+  const client = getSupabase();
   if (!client) {
     return {
       connected: false,

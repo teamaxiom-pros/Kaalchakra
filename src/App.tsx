@@ -32,11 +32,15 @@ import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 
 function AppContent() {
-  const { user, profile: authProfile, playerProgress, refreshProfile } = useAuth();
-
-  const [localProfile, setLocalProfile] = useState<PlayerProfile>(() => {
-    return storageService.loadPlayerProfile();
-  });
+  const {
+    user,
+    profile: authProfile,
+    playerProgress,
+    unlockedDiscoveries,
+    unlockedAchievements,
+    completedExperiences,
+    refreshProfile,
+  } = useAuth();
 
   const [currentPath, setCurrentPath] = useState<string>(() => {
     return window.location.pathname;
@@ -81,43 +85,40 @@ function AppContent() {
           waterManagement: playerProgress.water_management_score,
           heritage: playerProgress.heritage_score,
           engineering: playerProgress.engineering_score,
-          language: playerProgress.language_score || localProfile.domainScores?.language || 0,
+          language: playerProgress.language_score || 0,
         },
-        completedExperiences: localProfile.completedExperiences || [],
-        unlockedDiscoveries: localProfile.unlockedDiscoveries || [],
-        unlockedAchievements: localProfile.unlockedAchievements || [],
-        lastActiveAt: new Date().toISOString(),
+        completedExperiences: completedExperiences || [],
+        unlockedDiscoveries: unlockedDiscoveries || [],
+        unlockedAchievements: unlockedAchievements || [],
+        lastActiveAt: authProfile?.updated_at || '2026-10-05T00:00:00Z',
         simulationMode: false,
       };
     }
 
-    return localProfile || EMPTY_PROFILE;
-  }, [user, playerProgress, authProfile, localProfile]);
+    return EMPTY_PROFILE;
+  }, [user, playerProgress, authProfile, completedExperiences, unlockedDiscoveries, unlockedAchievements]);
 
   // Handler when any experience completes
   const handleExperienceCompletion = async (
     experienceId: string,
     xpEarned: number,
     domainGains: Record<string, number>,
-    unlockedDiscoveries: string[],
-    performance: number
+    unlockedDiscoveriesList: string[],
+    performance: number,
+    existingSessionId?: string
   ) => {
     const { updatedProfile } = recordExperienceCompletion(
       activeProfile,
       experienceId,
       xpEarned,
       domainGains,
-      unlockedDiscoveries,
+      unlockedDiscoveriesList,
       performance
     );
 
-    const sessionId = crypto.randomUUID();
+    const sessionId = existingSessionId || crypto.randomUUID();
 
-    // Update local profile state
-    storageService.savePlayerProfile(updatedProfile);
-    setLocalProfile(updatedProfile);
-
-    // Save session locally
+    // Save session locally scoped to current user
     const session = {
       sessionId,
       experienceId,
@@ -126,9 +127,10 @@ function AppContent() {
       actions: [],
       score: performance,
       xpEarned,
-      discoveriesUnlocked: unlockedDiscoveries,
+      discoveriesUnlocked: unlockedDiscoveriesList,
     };
-    storageService.saveGameSession(session);
+    storageService.saveGameSession(session, user?.id);
+    storageService.savePlayerProfile(updatedProfile, user?.id);
 
     // If authenticated and Supabase is configured, submit authoritative completion
     if (user && isSupabaseReady()) {
@@ -240,8 +242,8 @@ function AppContent() {
             profile={activeProfile}
             navigate={navigate}
             onProfileUpdated={updated => {
-              storageService.savePlayerProfile(updated);
-              setLocalProfile(updated);
+              storageService.savePlayerProfile(updated, user?.id);
+              refreshProfile();
             }}
           />
         </ProtectedRoute>
@@ -255,8 +257,8 @@ function AppContent() {
           <ProfilePage
             profile={activeProfile}
             onUpdateProfile={updated => {
-              storageService.savePlayerProfile(updated);
-              setLocalProfile(updated);
+              storageService.savePlayerProfile(updated, user?.id);
+              refreshProfile();
             }}
             gameMasterMode={gameMasterMode}
           />
@@ -278,8 +280,8 @@ function AppContent() {
       return (
         <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <FortMasterGame
-            onCompleteExperience={(xp, gains, discs, perf) =>
-              handleExperienceCompletion('fort-master', xp, gains, discs, perf)
+            onCompleteExperience={(xp, gains, discs, perf, sessId) =>
+              handleExperienceCompletion('fort-master', xp, gains, discs, perf, sessId)
             }
             onNavigate={navigate}
             gameMasterMode={gameMasterMode}
@@ -292,8 +294,8 @@ function AppContent() {
       return (
         <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <BharatArchitectGame
-            onCompleteExperience={(xp, gains, discs, perf) =>
-              handleExperienceCompletion('bharat-architect', xp, gains, discs, perf)
+            onCompleteExperience={(xp, gains, discs, perf, sessId) =>
+              handleExperienceCompletion('bharat-architect', xp, gains, discs, perf, sessId)
             }
             onNavigate={navigate}
             gameMasterMode={gameMasterMode}
@@ -306,8 +308,8 @@ function AppContent() {
       return (
         <ProtectedRoute currentPath={currentPath} navigate={navigate}>
           <LostScriptGame
-            onCompleteExperience={(xp, gains, discs, perf) =>
-              handleExperienceCompletion('lost-script', xp, gains, discs, perf)
+            onCompleteExperience={(xp, gains, discs, perf, sessId) =>
+              handleExperienceCompletion('lost-script', xp, gains, discs, perf, sessId)
             }
             onNavigate={navigate}
             gameMasterMode={gameMasterMode}

@@ -3,33 +3,27 @@ import {
   Sparkles,
   Compass,
   ArrowRight,
-  Shield,
-  Layers,
-  Award,
 } from 'lucide-react';
-import { EXPERIENCES } from '../../data/experiences';
 import {
   RoyalSealBadge,
   FortSilhouetteSvg,
   TopographicMapSvg,
   CornerBrackets,
-  WaxSealStamp,
   HistoricalDivider,
   FortGateIcon,
   ScrollManuscriptIcon,
   MasonCompassIcon,
-  AncientCoinIcon,
   EpigraphTabletIcon,
+  WaxSealStamp,
 } from '../../components/common/HistoricalMotifs';
+import { EXPERIENCES } from '../../data/experiences';
 
 interface LandingPageProps {
   navigate: (path: string) => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
-  const playableExperiences = EXPERIENCES.filter(e => e.status === 'playable');
   const previewExperiences = EXPERIENCES.filter(e => e.status === 'preview');
-
   return (
     <div style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', overflowX: 'hidden' }}>
       {/* =====================================================================
@@ -697,11 +691,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
             <RoyalSealBadge size={58} />
           </div>
           <h2 style={{ fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)', marginBottom: '1rem', fontFamily: 'var(--font-serif)' }}>
-            Unroll the Royal Chronicle
+            Your journey into India's history begins here.
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', lineHeight: 1.7, marginBottom: '2.5rem' }}>
             Inscribe your scholar name and explore thousands of years of Indian engineering, governance,
-            and epigraphical wisdom through play.
+            and epigraphical wisdom through interactive discovery.
           </p>
           <div style={{ display: 'flex', gap: '1.25rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -710,7 +704,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
               id="landing-bottom-cta-signup"
               style={{ padding: '0.9rem 2.5rem', fontSize: '1.05rem', letterSpacing: '0.08em' }}
             >
-              <Sparkles size={18} /> START DISCOVERING
+              <Sparkles size={18} /> Start Your Journey
             </button>
             <button
               onClick={() => navigate('/auth/login')}
@@ -718,7 +712,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ navigate }) => {
               id="landing-bottom-cta-login"
               style={{ padding: '0.9rem 2rem', fontSize: '1.05rem', letterSpacing: '0.08em' }}
             >
-              SIGN IN TO EXISTING ACCOUNT
+              Sign In To Account
             </button>
           </div>
         </div>

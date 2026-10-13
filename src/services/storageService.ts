@@ -29,36 +29,44 @@ export const EMPTY_PROFILE: PlayerProfile = {
   simulationMode: false,
 };
 
+const getPlayerKey = (userId?: string) => userId ? `kaalchakra:player:${userId}` : STORAGE_KEYS.PLAYER;
+const getSessionsKey = (userId?: string) => userId ? `kaalchakra:sessions:${userId}` : STORAGE_KEYS.SESSIONS;
+
 export const storageService = {
-  loadPlayerProfile(): PlayerProfile {
+  loadPlayerProfile(userId?: string): PlayerProfile {
     try {
       if (typeof window === 'undefined' || !window.localStorage) {
-        return EMPTY_PROFILE;
+        return { ...EMPTY_PROFILE, id: userId || '' };
       }
-      const data = localStorage.getItem(STORAGE_KEYS.PLAYER);
+      const key = getPlayerKey(userId);
+      const data = localStorage.getItem(key);
       if (!data) {
-        return EMPTY_PROFILE;
+        return { ...EMPTY_PROFILE, id: userId || '' };
       }
-      return JSON.parse(data) as PlayerProfile;
+      const parsed = JSON.parse(data) as PlayerProfile;
+      return { ...EMPTY_PROFILE, ...parsed, id: userId || parsed.id || '' };
     } catch (err) {
       console.warn('Failed to load profile from localStorage:', err);
-      return EMPTY_PROFILE;
+      return { ...EMPTY_PROFILE, id: userId || '' };
     }
   },
 
-  savePlayerProfile(profile: PlayerProfile): void {
+  savePlayerProfile(profile: PlayerProfile, userId?: string): void {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
-      localStorage.setItem(STORAGE_KEYS.PLAYER, JSON.stringify(profile));
+      const targetId = userId || profile.id;
+      const key = getPlayerKey(targetId);
+      localStorage.setItem(key, JSON.stringify(profile));
     } catch (err) {
       console.warn('Failed to save profile to localStorage:', err);
     }
   },
 
-  loadGameSessions(): GameSession[] {
+  loadGameSessions(userId?: string): GameSession[] {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return [];
-      const data = localStorage.getItem(STORAGE_KEYS.SESSIONS);
+      const key = getSessionsKey(userId);
+      const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : [];
     } catch (err) {
       console.warn('Failed to load sessions from localStorage:', err);
@@ -66,29 +74,35 @@ export const storageService = {
     }
   },
 
-  saveGameSession(session: GameSession): void {
+  saveGameSession(session: GameSession, userId?: string): void {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
-      const sessions = this.loadGameSessions();
+      const sessions = this.loadGameSessions(userId);
       sessions.unshift(session);
       // Keep last 25 sessions
       const trimmed = sessions.slice(0, 25);
-      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(trimmed));
+      const key = getSessionsKey(userId);
+      localStorage.setItem(key, JSON.stringify(trimmed));
     } catch (err) {
       console.warn('Failed to save game session:', err);
     }
   },
 
-  resetJourney(): PlayerProfile {
+  resetJourney(userId?: string): PlayerProfile {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.removeItem(STORAGE_KEYS.PLAYER);
-        localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+        if (userId) {
+          localStorage.removeItem(getPlayerKey(userId));
+          localStorage.removeItem(getSessionsKey(userId));
+        } else {
+          localStorage.removeItem(STORAGE_KEYS.PLAYER);
+          localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+        }
       }
-      return EMPTY_PROFILE;
+      return { ...EMPTY_PROFILE, id: userId || '' };
     } catch (err) {
       console.warn('Failed to reset journey:', err);
-      return EMPTY_PROFILE;
+      return { ...EMPTY_PROFILE, id: userId || '' };
     }
   },
 };

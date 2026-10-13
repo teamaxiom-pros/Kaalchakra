@@ -71,15 +71,22 @@ export const offlineSyncService = {
     return eventId;
   },
 
-  async getPendingCount(): Promise<number> {
+  async getPendingCount(playerId?: string): Promise<number> {
     const db = await openDatabase();
     if (!db) return 0;
 
     return new Promise(resolve => {
       try {
         const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).count();
-        req.onsuccess = () => resolve(req.result);
+        const req = tx.objectStore(STORE_NAME).getAll();
+        req.onsuccess = () => {
+          const events: QueuedSyncEvent[] = req.result || [];
+          if (playerId) {
+            resolve(events.filter(e => e.playerId === playerId).length);
+          } else {
+            resolve(events.length);
+          }
+        };
         req.onerror = () => resolve(0);
       } catch {
         resolve(0);
@@ -87,8 +94,8 @@ export const offlineSyncService = {
     });
   },
 
-  async syncPendingQueue(): Promise<{ synced: number; failed: number }> {
-    if (!isSupabaseReady() || !navigator.onLine) {
+  async syncPendingQueue(currentUserId?: string): Promise<{ synced: number; failed: number }> {
+    if (!isSupabaseReady() || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       return { synced: 0, failed: 0 };
     }
 
@@ -101,7 +108,12 @@ export const offlineSyncService = {
       const req = store.getAll();
 
       req.onsuccess = async () => {
-        const events: QueuedSyncEvent[] = req.result || [];
+        const allEvents: QueuedSyncEvent[] = req.result || [];
+        // Only process events belonging to the current authenticated user!
+        const events = currentUserId
+          ? allEvents.filter(ev => ev.playerId === currentUserId)
+          : allEvents;
+
         let synced = 0;
         let failed = 0;
 
@@ -109,7 +121,6 @@ export const offlineSyncService = {
           try {
             const res = await progressService.submitAuthoritativeCompletion(ev.payload);
             if (res.success) {
-              // Delete synced event
               const delTx = db.transaction(STORE_NAME, 'readwrite');
               delTx.objectStore(STORE_NAME).delete(ev.eventId);
               synced++;

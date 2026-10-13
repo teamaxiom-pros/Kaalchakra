@@ -24,8 +24,8 @@ export const authService = {
     if (!email || !email.includes('@')) {
       return { user: null, session: null, error: 'Please enter a valid email address.' };
     }
-    if (!password || password.length < 6) {
-      return { user: null, session: null, error: 'Password must be at least 6 characters long.' };
+    if (!password || password.length < 8) {
+      return { user: null, session: null, error: 'Password must be at least 8 characters long.' };
     }
     if (!displayName || displayName.trim().length === 0) {
       return { user: null, session: null, error: 'Please enter a display name.' };

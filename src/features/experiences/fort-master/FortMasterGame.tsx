@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FortTile,
   FortStructureType,
@@ -13,8 +13,10 @@ import {
   calculateFortMetrics,
   placeStructure,
   removeStructure,
+  canPlaceStructure,
   evaluateCrisisEvent,
 } from '../../../domain/fortMaster/fortEngine';
+import { sessionService } from '../../../services/sessionService';
 import { GameMasterResponse } from '../../../types/ai';
 import { getGameMaster } from '../../../domain/ai/aiFactory';
 import { GameMasterWidget } from '../../../components/common/GameMasterWidget';
@@ -29,11 +31,9 @@ import {
   Shield,
   Sun,
   Sparkles,
-  Info,
-  Droplets,
-  Wheat,
-  Eye,
   Hammer,
+  AlertCircle,
+  BookOpen,
 } from 'lucide-react';
 
 interface FortMasterGameProps {
@@ -41,7 +41,8 @@ interface FortMasterGameProps {
     xpEarned: number,
     domainGains: Record<string, number>,
     unlockedDiscoveries: string[],
-    performance: number
+    performance: number,
+    sessionId?: string
   ) => void;
   onNavigate: (path: string) => void;
   gameMasterMode: 'local-deterministic' | 'gemini-live';
@@ -52,10 +53,17 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
   onNavigate,
   gameMasterMode,
 }) => {
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [grid, setGrid] = useState<FortTile[]>(() => createDefaultFortGrid());
   const [resources, setResources] = useState<FortResources>(() => ({ ...INITIAL_FORT_RESOURCES }));
   const [selectedStructure, setSelectedStructure] = useState<FortStructureType>('baoli');
   const [isDismantleMode, setIsDismantleMode] = useState(false);
+  const [hasTestedCrisis, setHasTestedCrisis] = useState(false);
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
+  const [placementFeedback, setPlacementFeedback] = useState<string | null>(null);
+  const [completionValidation, setCompletionValidation] = useState<string | null>(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
   const [activeCrisisOutcome, setActiveCrisisOutcome] = useState<{
     event: FortCrisisEvent;
     success: boolean;
@@ -69,6 +77,17 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
   const [activeDiscovery, setActiveDiscovery] = useState<CulturalKnowledge | null>(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
+  // Initialize authoritative game session on mount
+  useEffect(() => {
+    let isMounted = true;
+    sessionService.startSession('fort-master').then(id => {
+      if (isMounted && id) setSessionId(id);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const metrics = calculateFortMetrics(grid);
 
   const handleTileClick = async (tile: FortTile) => {
@@ -78,7 +97,20 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
       if (res) {
         setGrid(res.newGrid);
         setResources(res.newResources);
+        setPlacementFeedback(null);
+        if (sessionId) {
+          sessionService.recordAction(sessionId, 'fort-master', 'structure_dismantled', {
+            x: tile.x,
+            y: tile.y,
+          });
+        }
       }
+      return;
+    }
+
+    const check = canPlaceStructure(tile, selectedStructure, resources);
+    if (!check.allowed) {
+      setPlacementFeedback(check.reason || 'Cannot place structure on this terrain.');
       return;
     }
 
@@ -87,6 +119,17 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
 
     setGrid(res.newGrid);
     setResources(res.newResources);
+    setPlacementFeedback(null);
+    setCompletionValidation(null);
+
+    if (sessionId) {
+      sessionService.recordAction(sessionId, 'fort-master', 'structure_placed', {
+        structure: selectedStructure,
+        x: tile.x,
+        y: tile.y,
+        terrain: tile.terrain,
+      });
+    }
 
     // Contextual update from Game Master
     const def = FORT_STRUCTURES[selectedStructure];
@@ -110,6 +153,17 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
       event,
       ...outcome,
     });
+    setHasTestedCrisis(true);
+    setCompletionValidation(null);
+
+    if (sessionId) {
+      sessionService.recordAction(sessionId, 'fort-master', 'crisis_tested', {
+        crisisId: event.id,
+        outcome: outcome.rating,
+        success: outcome.success,
+        metrics,
+      });
+    }
 
     setGmLoading(true);
     const { provider } = getGameMaster();
@@ -153,18 +207,47 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
     setGrid(createDefaultFortGrid());
     setResources({ ...INITIAL_FORT_RESOURCES });
     setActiveCrisisOutcome(null);
+    setPlacementFeedback(null);
+    setCompletionValidation(null);
+    setHasTestedCrisis(false);
+    setIsSubmitted(false);
   };
 
   const handleCompleteMission = () => {
-    const xp = Math.round(100 + metrics.overallScore * 0.6);
+    if (isSubmitted) return;
+
+    const placedCount = grid.filter(t => t.structure).length;
+    if (placedCount < 3) {
+      setCompletionValidation(
+        'Fortress Incomplete: Construct at least 3 complementary fortifications (such as a rock-cut cistern, elevated granary, and bastion wall) before submitting.'
+      );
+      return;
+    }
+
+    if (!hasTestedCrisis) {
+      setCompletionValidation(
+        'Untested Defense: Test your fortress against at least one seasonal crisis (Monsoon Cloudburst or Siege Blockade) to verify its endurance under historical stress!'
+      );
+      return;
+    }
+
+    if (metrics.overallScore < 40) {
+      setCompletionValidation(
+        `Vulnerable Fortress: Overall resilience is currently ${metrics.overallScore}/100. Enhance water cisterns or defensive walls to achieve at least 40/100.`
+      );
+      return;
+    }
+
+    setIsSubmitted(true);
+    const xp = Math.min(220, Math.round(90 + metrics.overallScore * 0.7));
     const domainGains = {
       waterManagement: Math.round(metrics.waterResilience * 0.15),
       defence: Math.round(metrics.defenceRating * 0.15),
-      architecture: 10,
+      architecture: 15,
     };
     const discoveries = ['ck-shivneri-rainwater', 'ck-arthashastra-forts'];
 
-    onCompleteExperience(xp, domainGains, discoveries, metrics.overallScore);
+    onCompleteExperience(xp, domainGains, discoveries, metrics.overallScore, sessionId || undefined);
     setShowCompletionModal(true);
   };
 
@@ -197,19 +280,81 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
           <ArrowLeft size={16} /> All Experiences
         </button>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={handleReset} className="btn btn-secondary btn-sm">
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setIsBriefingOpen(true)}
+            className="btn btn-secondary btn-sm"
+            style={{ gap: '0.35rem' }}
+          >
+            <BookOpen size={14} /> Mission Briefing
+          </button>
+          <button onClick={handleReset} className="btn btn-secondary btn-sm" style={{ gap: '0.35rem' }}>
             <RotateCcw size={14} /> Reset Fort
           </button>
           <button
             onClick={handleCompleteMission}
             className="btn btn-primary btn-sm"
-            style={{ fontWeight: 700 }}
+            style={{ fontWeight: 700, gap: '0.35rem' }}
           >
-            <Sparkles size={14} /> Conclude & Submit Fort
+            <Sparkles size={14} /> Conclude &amp; Submit Fort
           </button>
         </div>
       </div>
+
+      {/* Validation Warning Alert */}
+      {completionValidation && (
+        <div
+          className="fade-in"
+          style={{
+            background: 'rgba(143, 60, 37, 0.25)',
+            border: '1.5px solid var(--accent-terracotta)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.85rem',
+          }}
+        >
+          <AlertCircle size={22} color="#f87171" style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: '0.9rem', color: '#fecaca', lineHeight: 1.5 }}>
+            {completionValidation}
+          </div>
+        </div>
+      )}
+
+      {/* Placement Feedback Toast */}
+      {placementFeedback && (
+        <div
+          className="fade-in"
+          style={{
+            background: 'rgba(200, 106, 26, 0.2)',
+            border: '1px solid var(--accent-saffron)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.75rem 1rem',
+            marginBottom: '1.25rem',
+            fontSize: '0.88rem',
+            color: '#fed7aa',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>⚠️ {placementFeedback}</span>
+          <button
+            onClick={() => setPlacementFeedback(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              fontWeight: 700,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Mission Banner */}
       <div
@@ -224,7 +369,7 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
           <span className="badge badge-gold">HISTORICAL FORTRESS CHRONICLE</span>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Deccan Basalt Hill Fort Architecture (Sahyadri Range)
+            17th-Century Maratha &amp; Deccan Hill Fort Architecture (Sahyadri Escarpment)
           </span>
         </div>
         <h2 style={{ fontSize: '1.55rem', fontFamily: 'var(--font-serif)', marginBottom: '0.45rem' }}>
@@ -644,6 +789,140 @@ export const FortMasterGame: React.FC<FortMasterGameProps> = ({
           />
         </div>
       </div>
+
+      {/* Mission Briefing Modal */}
+      {isBriefingOpen && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(5, 7, 10, 0.85)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+          }}
+          onClick={() => setIsBriefingOpen(false)}
+        >
+          <div
+            className="artifact-card fade-in"
+            style={{
+              maxWidth: '680px',
+              width: '100%',
+              background: 'linear-gradient(145deg, #181d26, #10131a)',
+              border: '1.5px solid var(--border-gold)',
+              padding: '2rem 2.25rem',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '1rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="badge badge-gold">STRATEGIC DISPATCH</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Adnyapatra Treatises
+                </span>
+              </div>
+              <button
+                onClick={() => setIsBriefingOpen(false)}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '0.2rem 0.6rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <h3
+              style={{
+                fontSize: '1.55rem',
+                fontFamily: 'var(--font-serif)',
+                color: '#fff8eb',
+                marginBottom: '0.5rem',
+              }}
+            >
+              Mission: Fortify the Sahyadri Escarpment
+            </h3>
+
+            <p
+              style={{
+                fontSize: '0.92rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+                marginBottom: '1.25rem',
+              }}
+            >
+              As documented in Ramchandra Pant Amatya&apos;s <em>Adnyapatra</em> (1715 CE):{' '}
+              <em>&quot;Hill forts are the very essence of the kingdom... A fort without independent water storage is like a cage.&quot;</em>{' '}
+              You must construct a sustainable defense on this basalt outcrop before seasonal crises strike.
+            </p>
+
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                borderLeft: '3px solid var(--accent-gold)',
+                padding: '1rem',
+                marginBottom: '1.25rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '0.4rem' }}>
+                CIVIL &amp; DEFENSIVE BLUEPRINT:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <li>
+                  <strong>Catchment Basins:</strong> Carve rock-cut rainwater cisterns (<em>Tankas</em>) to secure water resilience.
+                </li>
+                <li>
+                  <strong>Cliff Ridges:</strong> Construct curtain bastions (<em>Buruj</em>) and watchtowers with clear fields of fire.
+                </li>
+                <li>
+                  <strong>Choke Portals:</strong> Place Maha Darwaja gates in recessed angles to break enemy momentum.
+                </li>
+                <li>
+                  <strong>Plateau Center:</strong> Build elevated Amberkhana granaries to withstand prolonged sieges.
+                </li>
+              </ul>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(217, 119, 6, 0.1)',
+                border: '1px solid rgba(217, 119, 6, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.9rem',
+                marginBottom: '1.5rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--accent-saffron)', marginBottom: '0.25rem' }}>
+                VICTORY REQUIREMENTS:
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                1. Place at least 3 historical structures • 2. Test fortress against at least 1 seasonal crisis • 3. Maintain Fort Resilience ≥ 40.
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsBriefingOpen(false)}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', fontWeight: 700 }}
+            >
+              Begin Fort Construction
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Discovery Modal */}
       {activeDiscovery && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SettlementTile,
   SettlementComponentType,
@@ -11,7 +11,9 @@ import {
   evaluateSettlement,
   placeComponent,
   removeComponent,
+  canPlaceComponent,
 } from '../../../domain/bharatArchitect/architectEngine';
+import { sessionService } from '../../../services/sessionService';
 import { GameMasterResponse } from '../../../types/ai';
 import { getGameMaster } from '../../../domain/ai/aiFactory';
 import { GameMasterWidget } from '../../../components/common/GameMasterWidget';
@@ -25,9 +27,8 @@ import {
   Sparkles,
   Hammer,
   CloudRain,
-  Compass,
-  CheckCircle2,
-  Info,
+  BookOpen,
+  AlertCircle,
 } from 'lucide-react';
 
 interface BharatArchitectGameProps {
@@ -35,7 +36,8 @@ interface BharatArchitectGameProps {
     xpEarned: number,
     domainGains: Record<string, number>,
     unlockedDiscoveries: string[],
-    performance: number
+    performance: number,
+    sessionId?: string
   ) => void;
   onNavigate: (path: string) => void;
   gameMasterMode: 'local-deterministic' | 'gemini-live';
@@ -46,18 +48,33 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
   onNavigate,
   gameMasterMode,
 }) => {
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [grid, setGrid] = useState<SettlementTile[]>(() => createDefaultSettlementGrid(6, 5));
   const [resources, setResources] = useState<SettlementResources>(() => ({
     ...INITIAL_SETTLEMENT_RESOURCES,
   }));
   const [selectedComponent, setSelectedComponent] = useState<SettlementComponentType>('residential_block');
   const [isDismantleMode, setIsDismantleMode] = useState(false);
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
+  const [placementFeedback, setPlacementFeedback] = useState<string | null>(null);
+  const [completionValidation, setCompletionValidation] = useState<string | null>(null);
   const [floodSimulationResult, setFloodSimulationResult] = useState<{
     tested: boolean;
     passed: boolean;
     summary: string;
     culturalFact: string;
   } | null>(null);
+
+  // Initialize authoritative game session on mount
+  useEffect(() => {
+    let isMounted = true;
+    sessionService.startSession('bharat-architect').then(id => {
+      if (isMounted && id) setSessionId(id);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [lastGameMasterResponse, setLastGameMasterResponse] = useState<GameMasterResponse | null>(null);
   const [gmLoading, setGmLoading] = useState(false);
@@ -67,6 +84,9 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
   const evaluation = evaluateSettlement(grid, 6, 5);
 
   const handleTileClick = async (tile: SettlementTile) => {
+    setPlacementFeedback(null);
+    setCompletionValidation(null);
+
     if (isDismantleMode) {
       if (!tile.component) return;
       const res = removeComponent(grid, tile.x, tile.y, resources);
@@ -74,6 +94,12 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
         setGrid(res.newGrid);
         setResources(res.newResources);
       }
+      return;
+    }
+
+    const check = canPlaceComponent(tile, selectedComponent, resources);
+    if (!check.allowed) {
+      setPlacementFeedback(check.reason || 'Placement not permissible on this parcel.');
       return;
     }
 
@@ -113,6 +139,7 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
       summary,
       culturalFact,
     });
+    setCompletionValidation(null);
 
     setGmLoading(true);
     const { provider } = getGameMaster();
@@ -156,9 +183,36 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
     setGrid(createDefaultSettlementGrid(6, 5));
     setResources({ ...INITIAL_SETTLEMENT_RESOURCES });
     setFloodSimulationResult(null);
+    setPlacementFeedback(null);
+    setCompletionValidation(null);
   };
 
   const handleCompleteMission = () => {
+    const placedCount = grid.filter(t => Boolean(t.component)).length;
+
+    if (placedCount < 4) {
+      setCompletionValidation(
+        'Incomplete Settlement: You must construct at least 4 civil structures (residential blocks, thoroughfares, covered drains, or reservoirs) before concluding.'
+      );
+      return;
+    }
+
+    if (!floodSimulationResult) {
+      setCompletionValidation(
+        'Untested Urban Hydrology: You must execute the "Simulate Stormwater Flash Flood" test to verify your drainage conduits against seasonal monsoon deluge.'
+      );
+      return;
+    }
+
+    if (evaluation.overallScore < 35) {
+      setCompletionValidation(
+        `Insufficient Urban Viability: Overall rating is ${evaluation.overallScore}%. Improve road or drainage connectivity to reach at least 35% before submitting.`
+      );
+      return;
+    }
+
+    setCompletionValidation(null);
+
     const xp = Math.round(110 + evaluation.overallScore * 0.6);
     const domainGains = {
       architecture: Math.round(evaluation.roadAccessibilityScore * 0.15),
@@ -167,7 +221,7 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
     };
     const discoveries = ['ck-harappan-grid', 'ck-dholavira-water'];
 
-    onCompleteExperience(xp, domainGains, discoveries, evaluation.overallScore);
+    onCompleteExperience(xp, domainGains, discoveries, evaluation.overallScore, sessionId || undefined);
     setShowCompletionModal(true);
   };
 
@@ -192,19 +246,81 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
           <ArrowLeft size={16} /> All Experiences
         </button>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={handleReset} className="btn btn-secondary btn-sm">
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setIsBriefingOpen(true)}
+            className="btn btn-secondary btn-sm"
+            style={{ gap: '0.35rem' }}
+          >
+            <BookOpen size={14} /> Mission Briefing
+          </button>
+          <button onClick={handleReset} className="btn btn-secondary btn-sm" style={{ gap: '0.35rem' }}>
             <RotateCcw size={14} /> Reset Settlement
           </button>
           <button
             onClick={handleCompleteMission}
             className="btn btn-primary btn-sm"
-            style={{ fontWeight: 700 }}
+            style={{ fontWeight: 700, gap: '0.35rem' }}
           >
             <Sparkles size={14} /> Conclude Planning
           </button>
         </div>
       </div>
+
+      {/* Validation Warning Alert */}
+      {completionValidation && (
+        <div
+          className="fade-in"
+          style={{
+            background: 'rgba(143, 60, 37, 0.25)',
+            border: '1.5px solid var(--accent-terracotta)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.85rem',
+          }}
+        >
+          <AlertCircle size={22} color="#f87171" style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: '0.9rem', color: '#fecaca', lineHeight: 1.5 }}>
+            {completionValidation}
+          </div>
+        </div>
+      )}
+
+      {/* Placement Feedback Toast */}
+      {placementFeedback && (
+        <div
+          className="fade-in"
+          style={{
+            background: 'rgba(200, 106, 26, 0.2)',
+            border: '1px solid var(--accent-saffron)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.75rem 1rem',
+            marginBottom: '1.25rem',
+            fontSize: '0.88rem',
+            color: '#fed7aa',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>⚠️ {placementFeedback}</span>
+          <button
+            onClick={() => setPlacementFeedback(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              fontWeight: 700,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Mission Banner */}
       <div
@@ -583,6 +699,140 @@ export const BharatArchitectGame: React.FC<BharatArchitectGameProps> = ({
           />
         </div>
       </div>
+
+      {/* Mission Briefing Modal */}
+      {isBriefingOpen && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(5, 7, 10, 0.85)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+          }}
+          onClick={() => setIsBriefingOpen(false)}
+        >
+          <div
+            className="artifact-card fade-in"
+            style={{
+              maxWidth: '680px',
+              width: '100%',
+              background: 'linear-gradient(145deg, #1f1b14, #12151b)',
+              border: '1.5px solid var(--border-gold)',
+              padding: '2rem 2.25rem',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '1rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="badge badge-gold">MUNICIPAL DECREE</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Indus Valley Urbanism (2600–1900 BCE)
+                </span>
+              </div>
+              <button
+                onClick={() => setIsBriefingOpen(false)}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '0.2rem 0.6rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <h3
+              style={{
+                fontSize: '1.55rem',
+                fontFamily: 'var(--font-serif)',
+                color: '#fff8eb',
+                marginBottom: '0.5rem',
+              }}
+            >
+              Mission: Engineer the Harappan Orthogonal Grid
+            </h3>
+
+            <p
+              style={{
+                fontSize: '0.92rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+                marginBottom: '1.25rem',
+              }}
+            >
+              Excavations at Mohenjo-daro, Harappa, and Dholavira reveal the world&apos;s earliest planned
+              urban grids with standardized baked-brick proportions (1:2:4), universal drainage networks, and
+              sophisticated flood mitigation. You are tasked with engineering a resilient municipal quarter.
+            </p>
+
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                borderLeft: '3px solid var(--accent-gold)',
+                padding: '1rem',
+                marginBottom: '1.25rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '0.4rem' }}>
+                URBAN PLANNING PRINCIPLES:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <li>
+                  <strong>Orthogonal Thoroughfares:</strong> Lay paved north-south/east-west streets so courtyards and carts have unobstructed access.
+                </li>
+                <li>
+                  <strong>Covered Drainage Conduits:</strong> Run brick conduits alongside residential sectors with sump pits to prevent stagnant wastewater.
+                </li>
+                <li>
+                  <strong>Rock Reservoirs:</strong> Construct Dholavira-inspired freshwater catchment basins to absorb seasonal floodwaters.
+                </li>
+                <li>
+                  <strong>Civic Granaries:</strong> Position podium-elevated warehouses above flood grade to preserve grain reserves.
+                </li>
+              </ul>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(217, 119, 6, 0.1)',
+                border: '1px solid rgba(217, 119, 6, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.9rem',
+                marginBottom: '1.5rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--accent-saffron)', marginBottom: '0.25rem' }}>
+                VICTORY REQUIREMENTS:
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                1. Construct at least 4 urban structures • 2. Execute the Stormwater Flash Flood simulation • 3. Maintain Settlement Viability ≥ 35%.
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsBriefingOpen(false)}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', fontWeight: 700 }}
+            >
+              Begin Urban Planning
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Discovery Modal */}
       {activeDiscovery && (

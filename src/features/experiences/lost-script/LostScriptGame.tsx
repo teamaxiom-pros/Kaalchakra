@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   INSCRIPTION_CASES,
   createInitialLostScriptState,
@@ -8,6 +8,7 @@ import {
   evaluateCaseCompletion,
 } from '../../../domain/lostScript/scriptEngine';
 import { LostScriptSessionState } from '../../../domain/lostScript/scriptTypes';
+import { sessionService } from '../../../services/sessionService';
 import { GameMasterResponse } from '../../../types/ai';
 import { getGameMaster } from '../../../domain/ai/aiFactory';
 import { GameMasterWidget } from '../../../components/common/GameMasterWidget';
@@ -19,11 +20,9 @@ import {
   ArrowLeft,
   RotateCcw,
   Sparkles,
-  Scroll,
   Search,
   CheckCircle,
   AlertCircle,
-  HelpCircle,
   BookOpen,
 } from 'lucide-react';
 
@@ -32,7 +31,8 @@ interface LostScriptGameProps {
     xpEarned: number,
     domainGains: Record<string, number>,
     unlockedDiscoveries: string[],
-    performance: number
+    performance: number,
+    sessionId?: string
   ) => void;
   onNavigate: (path: string) => void;
   gameMasterMode: 'local-deterministic' | 'gemini-live';
@@ -43,11 +43,24 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
   onNavigate,
   gameMasterMode,
 }) => {
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<LostScriptSessionState>(() =>
     createInitialLostScriptState()
   );
   const [selectedGlyphId, setSelectedGlyphId] = useState<string>('glyph-dha');
   const [selectedCaseIndex, setSelectedCaseIndex] = useState(0);
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
+
+  // Initialize authoritative game session on mount
+  useEffect(() => {
+    let isMounted = true;
+    sessionService.startSession('lost-script').then(id => {
+      if (isMounted && id) setSessionId(id);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [questionFeedback, setQuestionFeedback] = useState<{
     qIndex: number;
@@ -134,7 +147,7 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
     };
     const discoveries = [currentCase.relatedKnowledgeId];
 
-    onCompleteExperience(xp, domainGains, discoveries, sessionState.score);
+    onCompleteExperience(xp, domainGains, discoveries, sessionState.score, sessionId || undefined);
     setShowCompletionModal(true);
   };
 
@@ -161,15 +174,22 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
           <ArrowLeft size={16} /> All Experiences
         </button>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={handleReset} className="btn btn-secondary btn-sm">
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setIsBriefingOpen(true)}
+            className="btn btn-secondary btn-sm"
+            style={{ gap: '0.35rem' }}
+          >
+            <BookOpen size={14} /> Mission Briefing
+          </button>
+          <button onClick={handleReset} className="btn btn-secondary btn-sm" style={{ gap: '0.35rem' }}>
             <RotateCcw size={14} /> Reset Clues
           </button>
           <button
             onClick={handleCompleteCase}
             disabled={!completion.isComplete}
             className={`btn btn-sm ${completion.isComplete ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ fontWeight: 700, opacity: completion.isComplete ? 1 : 0.6 }}
+            style={{ fontWeight: 700, opacity: completion.isComplete ? 1 : 0.6, gap: '0.35rem' }}
           >
             <Sparkles size={14} /> Submit Decipherment
           </button>
@@ -580,6 +600,134 @@ export const LostScriptGame: React.FC<LostScriptGameProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Mission Briefing Modal */}
+      {isBriefingOpen && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(5, 7, 10, 0.85)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+          }}
+          onClick={() => setIsBriefingOpen(false)}
+        >
+          <div
+            className="artifact-card fade-in"
+            style={{
+              maxWidth: '680px',
+              width: '100%',
+              background: 'linear-gradient(145deg, #221c1c, #131720)',
+              border: '1.5px solid var(--border-gold)',
+              padding: '2rem 2.25rem',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '1rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="badge badge-gold">EPIGRAPHICAL BRIEFING</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Archaeological Survey of India
+                </span>
+              </div>
+              <button
+                onClick={() => setIsBriefingOpen(false)}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '0.2rem 0.6rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <h3
+              style={{
+                fontSize: '1.55rem',
+                fontFamily: 'var(--font-serif)',
+                color: '#fff8eb',
+                marginBottom: '0.5rem',
+              }}
+            >
+              Mission: Epigraphical Epiphany &amp; Decipherment
+            </h3>
+
+            <p
+              style={{
+                fontSize: '0.92rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+                marginBottom: '1.25rem',
+              }}
+            >
+              Explore two distinct epigraphical chapters of Indian antiquity: the deciphered Ashokan Brahmi
+              edicts of Emperor Ashoka (c. 250 BCE) and the undeciphered symbolic seals of the Indus Valley
+              Civilization (c. 2300–1900 BCE).
+            </p>
+
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                borderLeft: '3px solid var(--accent-gold)',
+                padding: '1rem',
+                marginBottom: '1.25rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '0.4rem' }}>
+                EPIGRAPHICAL CONCORDANCES:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <li>
+                  <strong>Case 1 (Ashokan Brahmi):</strong> Deciphered in 1837 by James Prinsep. An abugida script where consonants take vowel diacritic strokes (matras) to write Prakrit imperial edicts.
+                </li>
+                <li>
+                  <strong>Case 2 (Lothal Indus Seal):</strong> Currently <em>undeciphered</em>. Catalogs like Mahadevan&apos;s 1977 Concordance record sign frequencies, right-to-left directionality, and terminal sign patterns without claiming definitive phonetic values.
+                </li>
+              </ul>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(217, 119, 6, 0.1)',
+                border: '1px solid rgba(217, 119, 6, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.9rem',
+                marginBottom: '1.5rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--accent-saffron)', marginBottom: '0.25rem' }}>
+                INVESTIGATION METHODOLOGY:
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                Inspect glyph strokes and ligature modifications, assemble the inscription sequence in the reading tray, and answer epigraphical inquiry prompts to validate your analysis.
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsBriefingOpen(false)}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', fontWeight: 700 }}
+            >
+              Begin Epigraphical Analysis
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Discovery Modal */}
       {activeDiscovery && (

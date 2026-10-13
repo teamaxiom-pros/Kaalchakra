@@ -4,6 +4,9 @@ import { getSupabase, isSupabaseReady } from '../lib/supabase/client';
 import { authService, SignUpParams, SignInParams } from '../services/authService';
 import { profileService, ProfileRecord } from '../services/profileService';
 import { progressService, PlayerProgressRecord } from '../services/progressService';
+import { discoveryService } from '../services/discoveryService';
+import { achievementService } from '../services/achievementService';
+import { sessionService, GameSessionRecord } from '../services/sessionService';
 import { offlineSyncService } from '../services/offlineSyncService';
 
 interface AuthContextType {
@@ -11,6 +14,10 @@ interface AuthContextType {
   session: Session | null;
   profile: ProfileRecord | null;
   playerProgress: PlayerProgressRecord | null;
+  unlockedDiscoveries: string[];
+  unlockedAchievements: string[];
+  completedExperiences: string[];
+  recentSessions: GameSessionRecord[];
   loading: boolean;
   initialized: boolean;
   isEmailVerified: boolean;
@@ -30,6 +37,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [playerProgress, setPlayerProgress] = useState<PlayerProgressRecord | null>(null);
+  const [unlockedDiscoveries, setUnlockedDiscoveries] = useState<string[]>([]);
+  const [unlockedAchievements, setUnlockedAchievements] = useState<string[]>([]);
+  const [completedExperiences, setCompletedExperiences] = useState<string[]>([]);
+  const [recentSessions, setRecentSessions] = useState<GameSessionRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [initialized, setInitialized] = useState<boolean>(false);
 
@@ -37,15 +48,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserData = async (currentUser: User) => {
     try {
-      const [userProfile, progress] = await Promise.all([
+      const [userProfile, progress, userDiscoveries, userAchievements, userSessions] = await Promise.all([
         profileService.getOwnProfile(currentUser.id),
         progressService.getPlayerProgress(currentUser.id),
+        discoveryService.getUserUnlockedDiscoverySlugs(currentUser.id),
+        achievementService.getUserUnlockedAchievementSlugs(currentUser.id),
+        sessionService.getRecentSessions(currentUser.id, 25),
       ]);
       setProfile(userProfile);
       setPlayerProgress(progress);
+      setUnlockedDiscoveries(userDiscoveries || []);
+      setUnlockedAchievements(userAchievements || []);
+      const completed = Array.from(new Set(
+        (userSessions || []).filter(s => s.status === 'completed').map(s => s.experience_id)
+      ));
+      setCompletedExperiences(completed);
+      setRecentSessions(userSessions || []);
 
-      // Trigger background sync for any queued offline sessions
-      offlineSyncService.syncPendingQueue().catch(() => {});
+      // Trigger background sync for any queued offline sessions belonging to this user
+      offlineSyncService.syncPendingQueue(currentUser.id).catch(() => {});
     } catch (err) {
       console.warn('Failed to load user profile or progress:', err);
     }
@@ -90,6 +111,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setPlayerProgress(null);
+          setUnlockedDiscoveries([]);
+          setUnlockedAchievements([]);
+          setCompletedExperiences([]);
+          setRecentSessions([]);
           setLoading(false);
         }
       }
@@ -127,6 +152,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSession(null);
     setProfile(null);
     setPlayerProgress(null);
+    setUnlockedDiscoveries([]);
+    setUnlockedAchievements([]);
+    setCompletedExperiences([]);
+    setRecentSessions([]);
     setLoading(false);
   };
 
@@ -153,6 +182,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         profile,
         playerProgress,
+        unlockedDiscoveries,
+        unlockedAchievements,
+        completedExperiences,
+        recentSessions,
         loading,
         initialized,
         isEmailVerified,

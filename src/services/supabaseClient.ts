@@ -36,7 +36,13 @@ let cachedClient: SupabaseClient | null = null;
 let lastUsedUrl = '';
 let lastUsedKey = '';
 
+let isExplicitlyCleared = false;
+
 export function getSupabaseConfig(): { url: string; anonKey: string } {
+  if (isExplicitlyCleared) {
+    return { url: '', anonKey: '' };
+  }
+
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
   const envKey =
     (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
@@ -53,6 +59,11 @@ export function getSupabaseConfig(): { url: string; anonKey: string } {
 }
 
 export function setSupabaseConfig(url: string, anonKey: string): void {
+  if (url === '' && anonKey === '') {
+    isExplicitlyCleared = true;
+  } else {
+    isExplicitlyCleared = false;
+  }
   setStored(STORAGE_KEYS.URL, url.trim());
   setStored(STORAGE_KEYS.ANON_KEY, anonKey.trim());
 

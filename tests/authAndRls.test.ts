@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as supabaseClientModule from '../src/lib/supabase/client';
 import { isSupabaseReady, getSupabaseEnvConfig } from '../src/lib/supabase/client';
 import { authService } from '../src/services/authService';
 import { progressService, AuthoritativeCompletionPayload } from '../src/services/progressService';
@@ -48,6 +49,7 @@ describe('Auth & Production Security Architecture', () => {
     });
 
     it('provides safe generic error when client is unconfigured', async () => {
+      vi.spyOn(supabaseClientModule, 'getSupabase').mockReturnValue(null);
       const res = await authService.signIn({
         email: 'scholar@example.com',
         password: 'Password123!',
@@ -59,6 +61,7 @@ describe('Auth & Production Security Architecture', () => {
     });
 
     it('handles password recovery gracefully when database unconfigured', async () => {
+      vi.spyOn(supabaseClientModule, 'getSupabase').mockReturnValue(null);
       const res = await authService.resetPasswordForEmail('scholar@example.com');
       expect(res.error).toBeDefined();
     });
@@ -107,6 +110,7 @@ describe('Auth & Production Security Architecture', () => {
     });
 
     it('gracefully reports unconfigured state when submitting completion without database', async () => {
+      vi.spyOn(supabaseClientModule, 'getSupabase').mockReturnValue(null);
       const payload: AuthoritativeCompletionPayload = {
         sessionId: 'test-session-uuid-1234',
         experienceId: 'bharat-architect',

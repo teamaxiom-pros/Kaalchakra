@@ -197,10 +197,18 @@ WITH CHECK (
     AND role = (SELECT role FROM public.profiles WHERE id = auth.uid()) -- Prevents self-escalation of role!
 );
 
+CREATE POLICY "Users can insert own profile"
+ON public.profiles FOR INSERT
+WITH CHECK (auth.uid() = id);
+
 -- 2. Player Progress Policies
 CREATE POLICY "Users can read own progress"
 ON public.player_progress FOR SELECT
 USING (auth.uid() = player_id);
+
+CREATE POLICY "Users can insert own progress"
+ON public.player_progress FOR INSERT
+WITH CHECK (auth.uid() = player_id);
 
 CREATE POLICY "Linked educators can view learner progress"
 ON public.player_progress FOR SELECT
@@ -328,13 +336,15 @@ DECLARE
     v_current_progress RECORD;
     v_new_xp INTEGER;
     v_new_level INTEGER;
-    v_arch_gain INTEGER := COALESCE((p_domain_gains->>'architecture')::INTEGER, 0);
-    v_def_gain INTEGER := COALESCE((p_domain_gains->>'defence')::INTEGER, 0);
-    v_trade_gain INTEGER := COALESCE((p_domain_gains->>'trade')::INTEGER, 0);
-    v_water_gain INTEGER := COALESCE((p_domain_gains->>'water_management')::INTEGER, 0);
-    v_eng_gain INTEGER := COALESCE((p_domain_gains->>'engineering')::INTEGER, 0);
-    v_lang_gain INTEGER := COALESCE((p_domain_gains->>'language')::INTEGER, 0);
-    v_herit_gain INTEGER := COALESCE((p_domain_gains->>'heritage')::INTEGER, 0);
+    v_arch_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'architecture')::INTEGER, 0)));
+    v_def_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'defence')::INTEGER, 0)));
+    v_trade_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'trade')::INTEGER, 0)));
+    v_water_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'water_management')::INTEGER, 0)));
+    v_eng_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'engineering')::INTEGER, 0)));
+    v_lang_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'language')::INTEGER, 0)));
+    v_herit_gain INTEGER := LEAST(25, GREATEST(0, COALESCE((p_domain_gains->>'heritage')::INTEGER, 0)));
+    v_clamped_score INTEGER := LEAST(100, GREATEST(0, p_score));
+    v_validated_xp INTEGER;
     v_disc_slug TEXT;
     v_disc_id UUID;
     v_ach_slug TEXT;
@@ -345,14 +355,20 @@ BEGIN
         RAISE EXCEPTION 'Unauthenticated request';
     END IF;
 
+    -- Authoritative reward calculation & bounds (prevents arbitrary client inflation)
+    v_validated_xp := LEAST(250, GREATEST(0, p_xp_earned));
+    IF v_clamped_score < 30 THEN
+        v_validated_xp := LEAST(25, v_validated_xp);
+    END IF;
+
     -- Verify session ownership
     SELECT * INTO v_session FROM public.game_sessions
     WHERE id = p_session_id AND player_id = v_user_id;
 
     IF NOT FOUND THEN
-        -- Auto-create session record if created offline
+        -- Allow offline-created sessions but validate owner is auth.uid()
         INSERT INTO public.game_sessions (id, player_id, experience_id, status, score, xp_earned, started_at, completed_at)
-        VALUES (p_session_id, v_user_id, p_experience_id, 'completed', LEAST(100, GREATEST(0, p_score)), GREATEST(0, p_xp_earned), NOW() - INTERVAL '5 minutes', NOW())
+        VALUES (p_session_id, v_user_id, p_experience_id, 'completed', v_clamped_score, v_validated_xp, NOW() - INTERVAL '5 minutes', NOW())
         RETURNING * INTO v_session;
     ELSE
         -- Idempotency check: if already completed, do not award XP again!
@@ -368,8 +384,8 @@ BEGIN
         -- Update session status
         UPDATE public.game_sessions
         SET status = 'completed',
-            score = LEAST(100, GREATEST(0, p_score)),
-            xp_earned = GREATEST(0, p_xp_earned),
+            score = v_clamped_score,
+            xp_earned = v_validated_xp,
             completed_at = NOW()
         WHERE id = p_session_id;
     END IF;
@@ -382,7 +398,7 @@ BEGIN
         RETURNING * INTO v_current_progress;
     END IF;
 
-    v_new_xp := v_current_progress.xp + GREATEST(0, p_xp_earned);
+    v_new_xp := v_current_progress.xp + v_validated_xp;
     v_new_level := GREATEST(1, FLOOR(v_new_xp / 250) + 1);
 
     -- Update progress with clamped domain scores
@@ -400,10 +416,11 @@ BEGIN
     WHERE player_id = v_user_id
     RETURNING * INTO v_current_progress;
 
-    -- Unlock discoveries
+    -- Unlock discoveries (only published)
     IF p_discovery_slugs IS NOT NULL THEN
         FOREACH v_disc_slug IN ARRAY p_discovery_slugs LOOP
-            SELECT id INTO v_disc_id FROM public.cultural_discoveries WHERE slug = v_disc_slug;
+            SELECT id INTO v_disc_id FROM public.cultural_discoveries 
+            WHERE slug = v_disc_slug AND published = true;
             IF v_disc_id IS NOT NULL THEN
                 INSERT INTO public.player_discoveries (player_id, discovery_id, experience_id, session_id)
                 VALUES (v_user_id, v_disc_id, p_experience_id, p_session_id)
@@ -412,10 +429,11 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Unlock achievements
+    -- Unlock achievements (only published)
     IF p_achievement_slugs IS NOT NULL THEN
         FOREACH v_ach_slug IN ARRAY p_achievement_slugs LOOP
-            SELECT id INTO v_ach_id FROM public.achievements WHERE slug = v_ach_slug;
+            SELECT id INTO v_ach_id FROM public.achievements 
+            WHERE slug = v_ach_slug AND published = true;
             IF v_ach_id IS NOT NULL THEN
                 INSERT INTO public.player_achievements (player_id, achievement_id)
                 VALUES (v_user_id, v_ach_id)
